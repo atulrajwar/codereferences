@@ -1,0 +1,71 @@
+{
+  "if": {
+    "allOf": [
+      {
+        "field": "type",
+        "equals": "Microsoft.ContainerService/managedClusters"
+      },
+      {
+        "field": "Microsoft.ContainerService/managedClusters/addonProfiles.omsagent.enabled",
+        "equals": "false"
+      }
+    ]
+  },
+  "then": {
+    "effect": "DeployIfNotExists",
+    "details": {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "existenceCondition": {
+        "field": "name",
+        "equals": "[parameters('dcrName')]"
+      },
+      "roleDefinitionIds": [
+        "/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
+      ],
+      "deployment": {
+        "properties": {
+          "mode": "incremental",
+          "template": {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+              "dcrName": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              }
+            },
+            "resources": [
+              {
+                "type": "Microsoft.Insights/dataCollectionRules",
+                "apiVersion": "2021-04-01",
+                "name": "[parameters('dcrName')]",
+                "location": "[parameters('location')]",
+                "properties": {
+                  "dataSources": {
+                    "logs": [
+                      {
+                        "name": "ContainerInsightsLogs",
+                        "category": "ContainerInsights",
+                        "enabled": true
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "parameters": {
+            "dcrName": {
+              "value": "[parameters('dcrName')]"
+            },
+            "location": {
+              "value": "[field('location')]"
+            }
+          }
+        }
+      }
+    }
+  }
+}
