@@ -1,71 +1,128 @@
 {
-  "if": {
-    "allOf": [
-      {
-        "field": "type",
-        "equals": "Microsoft.ContainerService/managedClusters"
+  "properties": {
+    "displayName": "Deploy AKS Data Collection Rule for Performance Counters, Container Logs, and Pod Inventory",
+    "description": "This policy deploys a specific Data Collection Rule to AKS clusters to collect performance counters, container logs, and pod inventory and send them to a Log Analytics Workspace.",
+    "mode": "All",
+    "metadata": {
+      "category": "Kubernetes"
+    },
+    "parameters": {
+      "logAnalyticsWorkspaceResourceId": {
+        "type": "String",
+        "metadata": {
+          "displayName": "Log Analytics Workspace Resource ID",
+          "description": "The resource ID of the Log Analytics Workspace where data will be sent."
+        }
       },
-      {
-        "field": "Microsoft.ContainerService/managedClusters/addonProfiles.omsagent.enabled",
-        "equals": "false"
+      "dcrLocation": {
+        "type": "String",
+        "defaultValue": "eastus",
+        "metadata": {
+          "displayName": "Data Collection Rule Location",
+          "description": "The Azure region where the Data Collection Rule will be deployed."
+        }
       }
-    ]
-  },
-  "then": {
-    "effect": "DeployIfNotExists",
-    "details": {
-      "type": "Microsoft.Insights/dataCollectionRules",
-      "existenceCondition": {
-        "field": "name",
-        "equals": "[parameters('dcrName')]"
+    },
+    "policyRule": {
+      "if": {
+        "allof": [
+          {
+            "field": "type",
+            "equals": "Microsoft.ContainerService/managedClusters"
+          },
+          {
+            "field": "name",
+            "notEquals": ""
+          }
+        ]
       },
-      "roleDefinitionIds": [
-        "/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
-      ],
-      "deployment": {
-        "properties": {
-          "mode": "incremental",
-          "template": {
-            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-            "contentVersion": "1.0.0.0",
-            "parameters": {
-              "dcrName": {
-                "type": "string"
-              },
-              "location": {
-                "type": "string"
-              }
-            },
-            "resources": [
+      "then": {
+        "effect": "deployIfNotExists",
+        "details": {
+          "type": "Microsoft.Insights/dataCollectionRules",
+          "name": "[concat('DCR-AKS-', uniqueString(field('name')))]",
+          "existenceCondition": {
+            "allOf": [
               {
-                "type": "Microsoft.Insights/dataCollectionRules",
-                "apiVersion": "2021-04-01",
-                "name": "[parameters('dcrName')]",
-                "location": "[parameters('location')]",
-                "properties": {
-                  "dataSources": {
-                    "logs": [
-                      {
-                        "name": "ContainerInsightsLogs",
-                        "category": "ContainerInsights",
-                        "enabled": true
-                      }
-                    ]
-                  }
-                }
+                "field": "Microsoft.Insights/dataCollectionRules/properties.destinations.logAnalytics[*].workspaceResourceId",
+                "equals": "[parameters('logAnalyticsWorkspaceResourceId')]"
               }
             ]
           },
-          "parameters": {
-            "dcrName": {
-              "value": "[parameters('dcrName')]"
-            },
-            "location": {
-              "value": "[field('location')]"
+          "deployment": {
+            "properties": {
+              "mode": "incremental",
+              "template": {
+                "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                "contentVersion": "1.0.0.0",
+                "parameters": {},
+                "resources": [
+                  {
+                    "type": "Microsoft.Insights/dataCollectionRules",
+                    "apiVersion": "2022-06-01",
+                    "name": "[concat('DCR-AKS-', uniqueString(field('name')))]",
+                    "location": "[parameters('dcrLocation')]",
+                    "properties": {
+                      "dataSources": {
+                        "performanceCounters": [
+                          {
+                            "name": "perfCountersDataSource1",
+                            "streams": [
+                              "Microsoft-Perf"
+                            ],
+                            "samplingFrequencySec": 15,
+                            "counterSpecifiers": [
+                              "\\\\Processor(_Total)\\\\% Processor Time",
+                              "\\\\Memory\\\\Available MBytes"
+                            ],
+                            "scheduledTransferPeriod": "PT5M"
+                          }
+                        ],
+                        "containerLogs": [
+                          {
+                            "name": "containerLogsDataSource1",
+                            "streams": [
+                              "Microsoft-ContainerLog"
+                            ]
+                          }
+                        ],
+                        "kubernetesObjects": [
+                          {
+                            "name": "kubepodinventoryDataSource1",
+                            "streams": [
+                              "Microsoft-KubePodInventory"
+                            ],
+                            "resourceUri": "/subscriptions/*/resourceGroups/*/providers/Microsoft.ContainerService/managedClusters/*"
+                          }
+                        ]
+                      },
+                      "destinations": {
+                        "logAnalytics": [
+                          {
+                            "workspaceResourceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
+                            "name": "laDestination1"
+                          }
+                        ]
+                      },
+                      "dataFlow": {
+                        "streams": [
+                          "Microsoft-Perf",
+                          "Microsoft-ContainerLog",
+                          "Microsoft-KubePodInventory"
+                        ],
+                        "destinations": [
+                          "laDestination1"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
             }
           }
         }
       }
     }
-  }
+  },
+  "type": "Microsoft.Authorization/policyDefinitions"
 }
